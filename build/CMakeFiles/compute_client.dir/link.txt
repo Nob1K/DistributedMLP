@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/compute_client.dir/compute_client.cpp.o -o compute_client  -Wl,-rpath,/home/chen7381/5105/thrift-0.19.0/lib/cpp/.libs libexgencpp.a /home/chen7381/5105/thrift-0.19.0/lib/cpp/.libs/libthrift.so 

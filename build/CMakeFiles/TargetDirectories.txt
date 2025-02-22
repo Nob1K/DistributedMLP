@@ -1,0 +1,5 @@
+/home/chen7381/5105/PA1/build/CMakeFiles/exgencpp.dir
+/home/chen7381/5105/PA1/build/CMakeFiles/compute_node.dir
+/home/chen7381/5105/PA1/build/CMakeFiles/compute_client.dir
+/home/chen7381/5105/PA1/build/CMakeFiles/edit_cache.dir
+/home/chen7381/5105/PA1/build/CMakeFiles/rebuild_cache.dir

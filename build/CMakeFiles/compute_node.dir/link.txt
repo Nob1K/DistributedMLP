@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/compute_node.dir/compute_server.cpp.o -o compute_node  -Wl,-rpath,/home/chen7381/5105/thrift-0.19.0/lib/cpp/.libs libexgencpp.a /home/chen7381/5105/thrift-0.19.0/lib/cpp/.libs/libthrift.so 
