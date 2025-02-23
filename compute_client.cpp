@@ -41,14 +41,14 @@
         transport->open();
         std::cout << client.check_availability() << std::endl;
         mlp almighty;
-        almighty.init_training("../letters/train_letters1.txt", 26, 20);
+        almighty.init_training_random("../letters/train_letters1.txt", 26, 20);
         vector<vector<double>> v, w;
         almighty.get_weights(v, w);
         weights global = {};
         weights updated = {};
         global.v = v;
         global.w = w;
-        client.train_model(updated, global, "../letters/train_letters1.txt", 0.001, 15);
+        client.train_model(updated, global, "../letters/train_letters1.txt", 0.0001, 75);
         transport->close();
    } catch (TException& tx) {
         cout << "ERROR: " << tx.what() << endl;

@@ -37,7 +37,7 @@ class ComputeHandler : virtual public ComputeIf {
     mlp model;
     vector<vector<double>> _V = coordWeights.v;
     vector<vector<double>> _W = coordWeights.w;
-    std::cout << "init: " << model.init_training(train_fname, _V, _W) << std::endl;
+    std::cout << "init: " << model.init_training_model(train_fname, _V, _W) << std::endl;
     std::cout << "train: " << model.train(eta, epochs) << std::endl;
     std::cout << "validate:" << model.validate("../letters/validate_letters.txt") << std::endl;
   }
