@@ -32,14 +32,22 @@ class ComputeHandler : virtual public ComputeIf {
   }
 
   void train_model( ::weights& _return, const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs) {
-    // Your implementation goes here
     printf("train_model\n");
+    // initialize
     mlp model;
     vector<vector<double>> _V = coordWeights.v;
     vector<vector<double>> _W = coordWeights.w;
-    std::cout << "init: " << model.init_training_model(train_fname, _V, _W) << std::endl;
-    std::cout << "train: " << model.train(eta, epochs) << std::endl;
-    std::cout << "validate:" << model.validate("../letters/validate_letters.txt") << std::endl;
+    // ml training
+    std::cout << "init success: " << model.init_training_model(train_fname, _V, _W) << std::endl;
+    std::cout << "training error: " << model.train(eta, epochs) << std::endl;
+    vector<vector<double>> newV, newW;
+    model.get_weights(newV, newW);
+    calc_gradient(newV, _V);
+    calc_gradient(newW, _W);
+    // return calculated gradients
+    _return.v = newV;
+    _return.w = newW;
+    std::cout << "validate error:" << model.validate("../letters/validate_letters.txt") << std::endl;
   }
 
 };
