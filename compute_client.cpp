@@ -51,7 +51,7 @@
         client.train_model(updated, global, "../letters/train_letters1.txt", 0.0001, 75);
         transport->close();
    } catch (TException& tx) {
-        cout << "ERROR: " << tx.what() << endl;
+        cout << "ERROR detected: " << tx.what() << endl;
    }
  }
  
