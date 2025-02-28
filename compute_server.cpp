@@ -6,6 +6,7 @@
 #include <string>
 #include <cstdlib>
 #include <ctime>
+#include <unistd.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/server/TSimpleServer.h>
 #include <thrift/transport/TServerSocket.h>
@@ -31,7 +32,9 @@ class ComputeHandler : virtual public ComputeIf {
     return (probability > load_probability) ? true : false;
   }
 
-  void train_model( ::weights& _return, const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs) {
+  void train_model( ::weights& _return, const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs, const bool sleep) {
+    // for load injection
+    if (sleep) sleep(5);
     printf("train_model\n");
     // initialize
     mlp model;
@@ -47,7 +50,7 @@ class ComputeHandler : virtual public ComputeIf {
     // return calculated gradients
     _return.v = newV;
     _return.w = newW;
-    std::cout << "validate error:" << model.validate("../letters/validate_letters.txt") << std::endl;
+    // std::cout << "validate error:" << model.validate("../letters/validate_letters.txt") << std::endl;
   }
 
 };

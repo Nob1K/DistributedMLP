@@ -23,7 +23,7 @@ class ComputeIf {
  public:
   virtual ~ComputeIf() {}
   virtual bool check_availability() = 0;
-  virtual void train_model( ::weights& _return, const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs) = 0;
+  virtual void train_model( ::weights& _return, const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs, const bool sleep) = 0;
 };
 
 class ComputeIfFactory {
@@ -57,7 +57,7 @@ class ComputeNull : virtual public ComputeIf {
     bool _return = false;
     return _return;
   }
-  void train_model( ::weights& /* _return */, const  ::weights& /* coordWeights */, const std::string& /* train_fname */, const double /* eta */, const int32_t /* epochs */) override {
+  void train_model( ::weights& /* _return */, const  ::weights& /* coordWeights */, const std::string& /* train_fname */, const double /* eta */, const int32_t /* epochs */, const bool /* sleep */) override {
     return;
   }
 };
@@ -156,11 +156,12 @@ class Compute_check_availability_presult {
 };
 
 typedef struct _Compute_train_model_args__isset {
-  _Compute_train_model_args__isset() : coordWeights(false), train_fname(false), eta(false), epochs(false) {}
+  _Compute_train_model_args__isset() : coordWeights(false), train_fname(false), eta(false), epochs(false), sleep(false) {}
   bool coordWeights :1;
   bool train_fname :1;
   bool eta :1;
   bool epochs :1;
+  bool sleep :1;
 } _Compute_train_model_args__isset;
 
 class Compute_train_model_args {
@@ -171,7 +172,8 @@ class Compute_train_model_args {
   Compute_train_model_args() noexcept
                            : train_fname(),
                              eta(0),
-                             epochs(0) {
+                             epochs(0),
+                             sleep(0) {
   }
 
   virtual ~Compute_train_model_args() noexcept;
@@ -179,6 +181,7 @@ class Compute_train_model_args {
   std::string train_fname;
   double eta;
   int32_t epochs;
+  bool sleep;
 
   _Compute_train_model_args__isset __isset;
 
@@ -190,6 +193,8 @@ class Compute_train_model_args {
 
   void __set_epochs(const int32_t val);
 
+  void __set_sleep(const bool val);
+
   bool operator == (const Compute_train_model_args & rhs) const
   {
     if (!(coordWeights == rhs.coordWeights))
@@ -199,6 +204,8 @@ class Compute_train_model_args {
     if (!(eta == rhs.eta))
       return false;
     if (!(epochs == rhs.epochs))
+      return false;
+    if (!(sleep == rhs.sleep))
       return false;
     return true;
   }
@@ -223,6 +230,7 @@ class Compute_train_model_pargs {
   const std::string* train_fname;
   const double* eta;
   const int32_t* epochs;
+  const bool* sleep;
 
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
 
@@ -311,8 +319,8 @@ class ComputeClient : virtual public ComputeIf {
   bool check_availability() override;
   void send_check_availability();
   bool recv_check_availability();
-  void train_model( ::weights& _return, const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs) override;
-  void send_train_model(const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs);
+  void train_model( ::weights& _return, const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs, const bool sleep) override;
+  void send_train_model(const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs, const bool sleep);
   void recv_train_model( ::weights& _return);
  protected:
   std::shared_ptr< ::apache::thrift::protocol::TProtocol> piprot_;
@@ -373,13 +381,13 @@ class ComputeMultiface : virtual public ComputeIf {
     return ifaces_[i]->check_availability();
   }
 
-  void train_model( ::weights& _return, const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs) override {
+  void train_model( ::weights& _return, const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs, const bool sleep) override {
     size_t sz = ifaces_.size();
     size_t i = 0;
     for (; i < (sz - 1); ++i) {
-      ifaces_[i]->train_model(_return, coordWeights, train_fname, eta, epochs);
+      ifaces_[i]->train_model(_return, coordWeights, train_fname, eta, epochs, sleep);
     }
-    ifaces_[i]->train_model(_return, coordWeights, train_fname, eta, epochs);
+    ifaces_[i]->train_model(_return, coordWeights, train_fname, eta, epochs, sleep);
     return;
   }
 
@@ -418,8 +426,8 @@ class ComputeConcurrentClient : virtual public ComputeIf {
   bool check_availability() override;
   int32_t send_check_availability();
   bool recv_check_availability(const int32_t seqid);
-  void train_model( ::weights& _return, const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs) override;
-  int32_t send_train_model(const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs);
+  void train_model( ::weights& _return, const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs, const bool sleep) override;
+  int32_t send_train_model(const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs, const bool sleep);
   void recv_train_model( ::weights& _return, const int32_t seqid);
  protected:
   std::shared_ptr< ::apache::thrift::protocol::TProtocol> piprot_;

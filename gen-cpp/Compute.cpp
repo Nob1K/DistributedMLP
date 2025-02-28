@@ -232,6 +232,14 @@ uint32_t Compute_train_model_args::read(::apache::thrift::protocol::TProtocol* i
           xfer += iprot->skip(ftype);
         }
         break;
+      case 5:
+        if (ftype == ::apache::thrift::protocol::T_BOOL) {
+          xfer += iprot->readBool(this->sleep);
+          this->__isset.sleep = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
       default:
         xfer += iprot->skip(ftype);
         break;
@@ -265,6 +273,10 @@ uint32_t Compute_train_model_args::write(::apache::thrift::protocol::TProtocol* 
   xfer += oprot->writeI32(this->epochs);
   xfer += oprot->writeFieldEnd();
 
+  xfer += oprot->writeFieldBegin("sleep", ::apache::thrift::protocol::T_BOOL, 5);
+  xfer += oprot->writeBool(this->sleep);
+  xfer += oprot->writeFieldEnd();
+
   xfer += oprot->writeFieldStop();
   xfer += oprot->writeStructEnd();
   return xfer;
@@ -294,6 +306,10 @@ uint32_t Compute_train_model_pargs::write(::apache::thrift::protocol::TProtocol*
 
   xfer += oprot->writeFieldBegin("epochs", ::apache::thrift::protocol::T_I32, 4);
   xfer += oprot->writeI32((*(this->epochs)));
+  xfer += oprot->writeFieldEnd();
+
+  xfer += oprot->writeFieldBegin("sleep", ::apache::thrift::protocol::T_BOOL, 5);
+  xfer += oprot->writeBool((*(this->sleep)));
   xfer += oprot->writeFieldEnd();
 
   xfer += oprot->writeFieldStop();
@@ -466,13 +482,13 @@ bool ComputeClient::recv_check_availability()
   throw ::apache::thrift::TApplicationException(::apache::thrift::TApplicationException::MISSING_RESULT, "check_availability failed: unknown result");
 }
 
-void ComputeClient::train_model( ::weights& _return, const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs)
+void ComputeClient::train_model( ::weights& _return, const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs, const bool sleep)
 {
-  send_train_model(coordWeights, train_fname, eta, epochs);
+  send_train_model(coordWeights, train_fname, eta, epochs, sleep);
   recv_train_model(_return);
 }
 
-void ComputeClient::send_train_model(const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs)
+void ComputeClient::send_train_model(const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs, const bool sleep)
 {
   int32_t cseqid = 0;
   oprot_->writeMessageBegin("train_model", ::apache::thrift::protocol::T_CALL, cseqid);
@@ -482,6 +498,7 @@ void ComputeClient::send_train_model(const  ::weights& coordWeights, const std::
   args.train_fname = &train_fname;
   args.eta = &eta;
   args.epochs = &epochs;
+  args.sleep = &sleep;
   args.write(oprot_);
 
   oprot_->writeMessageEnd();
@@ -623,7 +640,7 @@ void ComputeProcessor::process_train_model(int32_t seqid, ::apache::thrift::prot
 
   Compute_train_model_result result;
   try {
-    iface_->train_model(result.success, args.coordWeights, args.train_fname, args.eta, args.epochs);
+    iface_->train_model(result.success, args.coordWeights, args.train_fname, args.eta, args.epochs, args.sleep);
     result.__isset.success = true;
   } catch (const std::exception& e) {
     if (this->eventHandler_.get() != nullptr) {
@@ -744,13 +761,13 @@ bool ComputeConcurrentClient::recv_check_availability(const int32_t seqid)
   } // end while(true)
 }
 
-void ComputeConcurrentClient::train_model( ::weights& _return, const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs)
+void ComputeConcurrentClient::train_model( ::weights& _return, const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs, const bool sleep)
 {
-  int32_t seqid = send_train_model(coordWeights, train_fname, eta, epochs);
+  int32_t seqid = send_train_model(coordWeights, train_fname, eta, epochs, sleep);
   recv_train_model(_return, seqid);
 }
 
-int32_t ComputeConcurrentClient::send_train_model(const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs)
+int32_t ComputeConcurrentClient::send_train_model(const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs, const bool sleep)
 {
   int32_t cseqid = this->sync_->generateSeqId();
   ::apache::thrift::async::TConcurrentSendSentry sentry(this->sync_.get());
@@ -761,6 +778,7 @@ int32_t ComputeConcurrentClient::send_train_model(const  ::weights& coordWeights
   args.train_fname = &train_fname;
   args.eta = &eta;
   args.epochs = &epochs;
+  args.sleep = &sleep;
   args.write(oprot_);
 
   oprot_->writeMessageEnd();

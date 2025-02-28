@@ -9,6 +9,12 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <queue>
+#include <mutex>
+#include <thread>
+#include <atomic>
+#include <condition_variable>
+#include <filesystem>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/server/TSimpleServer.h>
 #include <thrift/transport/TServerSocket.h>
@@ -16,10 +22,19 @@
 #include <thrift/transport/TSocket.h>
 #include <thrift/transport/TTransportUtils.h>
 
+namespace fs = std::filesystem;
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
 using namespace ::apache::thrift::server;
+
+// global for shared gradient and file_queue, mutex locks for them
+weights shared_gradient;
+std::queue<std::string> file_queue;
+std::mutex gradient_mutex;
+std::mutex files_mutex;
+std::condition_variable file_cv;
+std::atomic<bool> done_training(false);
 
 struct node {
   std::string ip,
@@ -38,10 +53,91 @@ class coordinatorHandler : virtual public coordinatorIf {
     // Your implementation goes here
     printf("train\n");
     mlp almighty;
-    almighty.init_training_random("", k, h);
+    // populate training file names
+    {
+      std::lock_guard<std::mutex> lock(files_mutex);
+      file_queue = findTrainingFiles(dir);
+    }
+    // init almighty
+    almighty.init_training_random(file_queue.front(), k, h);
+    // clear out before readding during training
+    {
+      std::lock_guard<std::mutex> lock(files_mutex);
+      while (!file_queue.empty()) file_queue.pop();
+    }
+    // initialize shared gradient
+    gradient_mutex.lock();
+    almighty.get_weights(shared_gradient.v, shared_gradient.w);
+    gradient_mutex.unlock();
 
+    // acquire online nodes
+    std::vector<node> online_nodes = gather_online_nodes(extract_nodes_info("../compute_nodes.txt"));
+    // spawn threads for each online node to work through training files
+    vector<std::thread> threads;
+    for (const auto& n : online_nodes) {
+      threads.push_back(std::thread(&coordinatorHandler::thread_func, this, n, std::ref(almighty), eta, epochs));
+    }
+    // for loop to start rounds
+    for (int i=0; i < rounds; i++) {
+      // initialize (zero out) shared gradient
+      {
+        std::lock_guard<std::mutex> lock(gradient_mutex);
+        scale_matricies(shared_gradient.v, 0);
+        scale_matricies(shared_gradient.w, 0);
+      }
+
+      // populate queue of training files then notify threads
+      {
+        std::lock_guard<std::mutex> lock(files_mutex);
+        file_queue = findTrainingFiles(dir);
+      }
+      file_cv.notify_all();
+      
+
+      // divide gradient by total training files
+
+      // update weights of almighty
+
+      // print validate error on current round
+
+    }
+    // join threads
+    for (auto& t : threads) {
+      if (t.joinable()) {
+        t.join();
+      }
+    }
+    done_training.store(true);
+    file_cv.notify_all();
+    // return validation error
+    
   }
 
+  // thread execution
+  void thread_func(node n, mlp& model, double eta, int32_t epochs) {
+    std::string training_file;
+    while (true) {
+      {
+        std::unique_lock<std::mutex> lock(files_mutex);
+        file_cv.wait(lock, [&] {
+          return !file_queue.empty() || done_training.load();
+        });
+
+        if (done_training.load() && file_queue.empty()) {
+          break;
+        }
+
+        training_file = file_queue.front();
+        file_queue.pop();
+        
+
+      }
+      // actually contact a node
+      
+    }
+  }
+
+  // extract nodes from compute_nodes.txt
   std::vector<node> extract_nodes_info(const std::string& filename) {
     std::vector<node> nodes;
     std::ifstream file(filename);
@@ -82,6 +178,7 @@ class coordinatorHandler : virtual public coordinatorIf {
     }
   }
 
+  // return online nodes from all_nodes
   std::vector<node> gather_online_nodes(std::vector<node> all_nodes) {
     std::vector<node> online_nodes;
     for (const auto& n : all_nodes) {
@@ -90,6 +187,22 @@ class coordinatorHandler : virtual public coordinatorIf {
         }
     }
     return online_nodes;
+  }
+
+  // populate training file queue
+  std::queue<std::string> findTrainingFiles(const std::string& directory) {
+    std::queue<std::string> matchingFiles;
+    fs::path basePath = fs::absolute(directory);
+
+    for (const auto& entry : fs::directory_iterator(basePath)) {
+        if (entry.is_regular_file()) {
+            std::string fullPath = entry.path().string();
+            if (fullPath.find("train") != std::string::npos) {
+                matchingFiles.push(fullPath);
+            }
+        }
+    }
+    return matchingFiles;
   }
 
 };
