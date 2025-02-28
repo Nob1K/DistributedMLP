@@ -35,22 +35,27 @@ std::mutex gradient_mutex;
 std::mutex files_mutex;
 std::condition_variable file_cv;
 std::atomic<bool> done_training(false);
+std::atomic<int> files_processed(0);
+std::atomic<int> total_files(0);
+std::condition_variable round_complete_cv;
+std::mutex round_mutex;
+bool round_complete = false;
 
 struct node {
-  std::string ip,
-  int port
+  std::string ip;
+  int port;
 };
 
 class coordinatorHandler : virtual public coordinatorIf {
  public:
+  // 1 is random, 2 is load-balancing
   int scheduling_policy;
+
   coordinatorHandler(int policy) {
-    // Your initialization goes here
     this->scheduling_policy = policy;
   }
 
   double train(const std::string& dir, const int32_t rounds, const int32_t epochs, const int32_t h, const int32_t k, const double eta) {
-    // Your implementation goes here
     printf("train\n");
     mlp almighty;
     // populate training file names
@@ -60,7 +65,7 @@ class coordinatorHandler : virtual public coordinatorIf {
     }
     // init almighty
     almighty.init_training_random(file_queue.front(), k, h);
-    // clear out before readding during training
+    // clear out before re-adding during training
     {
       std::lock_guard<std::mutex> lock(files_mutex);
       while (!file_queue.empty()) file_queue.pop();
@@ -77,9 +82,9 @@ class coordinatorHandler : virtual public coordinatorIf {
     for (const auto& n : online_nodes) {
       threads.push_back(std::thread(&coordinatorHandler::thread_func, this, n, std::ref(almighty), eta, epochs));
     }
-    // for loop to start rounds
+    // for loop to start rounds of training
     for (int i=0; i < rounds; i++) {
-      // initialize (zero out) shared gradient
+      // zero out shared gradient
       {
         std::lock_guard<std::mutex> lock(gradient_mutex);
         scale_matricies(shared_gradient.v, 0);
@@ -90,27 +95,45 @@ class coordinatorHandler : virtual public coordinatorIf {
       {
         std::lock_guard<std::mutex> lock(files_mutex);
         file_queue = findTrainingFiles(dir);
+        total_files.store(file_queue.size());
+        round_complete = false;
       }
       file_cv.notify_all();
-      
 
-      // divide gradient by total training files
-
-      // update weights of almighty
-
+      // wait for queue to be done
+      {
+        std::unique_lock<std::mutex> lock(round_mutex);
+        round_complete_cv.wait(lock, [&] {
+          return round_complete;
+        });
+      }
+      // aggregate results
+      {
+        // divide gradient by total training files
+        std::lock_guard<std::mutex> lock(gradient_mutex);
+        scale_matricies(shared_gradient.v, 1.0 / total_files.load());
+        scale_matricies(shared_gradient.w, 1.0 / total_files.load());
+        // update weights of almighty
+        weights current;
+        almighty.get_weights(current.v, current.w);
+        sum_matricies(current.v, shared_gradient.v);
+        sum_matricies(current.w, shared_gradient.w);
+        almighty.set_weights(current.v, current.w);
+      }
       // print validate error on current round
-
+      files_processed.store(0);
+      std::cout << "round " << i+1 << " validation error: " << almighty.validate("../letters/validate_letters.txt") << std::endl;
     }
+    done_training.store(true);
+    file_cv.notify_all();
     // join threads
     for (auto& t : threads) {
       if (t.joinable()) {
         t.join();
       }
     }
-    done_training.store(true);
-    file_cv.notify_all();
     // return validation error
-    
+    return almighty.validate("../letters/validate_letters.txt");
   }
 
   // thread execution
@@ -118,22 +141,76 @@ class coordinatorHandler : virtual public coordinatorIf {
     std::string training_file;
     while (true) {
       {
+        // wait for files to be populated or training is completely done
         std::unique_lock<std::mutex> lock(files_mutex);
         file_cv.wait(lock, [&] {
           return !file_queue.empty() || done_training.load();
         });
-
+        // exits thread if training is done
         if (done_training.load() && file_queue.empty()) {
           break;
         }
-
-        training_file = file_queue.front();
-        file_queue.pop();
-        
-
+        // acquire file
+        if (!file_queue.empty()) {
+          training_file = file_queue.front();
+          file_queue.pop();
+        } else {
+          continue;
+        }
       }
       // actually contact a node
-      
+      std::shared_ptr<TTransport> socket(new TSocket(n.ip, n.port));
+      std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+      std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+      ComputeClient client(protocol);
+      transport->open();
+      bool node_available = client.check_availability();
+      if (node_available) {
+        weights returned_gradient;
+        weights input_weights;
+        model.get_weights(input_weights.v, input_weights.w);
+        client.train_model(returned_gradient, input_weights, training_file, eta, epochs, false);
+        // update shared gradient
+        {
+          std::lock_guard<std::mutex> lock(gradient_mutex);
+          sum_matricies(shared_gradient.v, returned_gradient.v);
+          sum_matricies(shared_gradient.w, returned_gradient.w);
+          files_processed.fetch_add(1);
+        }
+      } 
+      // load injection in random scheduling
+      else if (!node_available && this->scheduling_policy == 1) {
+        weights returned_gradient;
+        weights input_weights;
+        model.get_weights(input_weights.v, input_weights.w);
+        client.train_model(returned_gradient, input_weights, training_file, eta, epochs, true);
+        {
+          std::lock_guard<std::mutex> lock(gradient_mutex);
+          sum_matricies(shared_gradient.v, returned_gradient.v);
+          sum_matricies(shared_gradient.w, returned_gradient.w);
+          files_processed.fetch_add(1);
+        }
+      } 
+      // rejected in load-balancing
+      else if (!node_available && this->scheduling_policy == 2) {
+        {
+          std::unique_lock<std::mutex> lock(files_mutex);
+          file_queue.push(training_file);
+        }
+        // not sure if notify is needed
+        file_cv.notify_one();
+      }
+      transport->close();
+
+      int processed = files_processed.load();
+      // all files from current round is done, notify main thread
+      if (processed == total_files.load()) {
+        {
+          std::lock_guard<std::mutex> lock(round_mutex);
+          round_complete = true;
+        }
+        round_complete_cv.notify_one();
+      }
     }
   }
 
@@ -169,7 +246,7 @@ class coordinatorHandler : virtual public coordinatorIf {
   
     try {
       transport->open();
-      client.check_availability()
+      client.check_availability();
       transport->close();
       return true;
     } 
@@ -231,4 +308,3 @@ int main(int argc, char **argv) {
   server.serve();
   return 0;
 }
-

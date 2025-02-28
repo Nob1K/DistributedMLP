@@ -6,7 +6,8 @@
 #include <string>
 #include <cstdlib>
 #include <ctime>
-#include <unistd.h>
+#include <chrono>
+#include <thread>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/server/TSimpleServer.h>
 #include <thrift/transport/TServerSocket.h>
@@ -28,21 +29,21 @@ class ComputeHandler : virtual public ComputeIf {
   bool check_availability() {
     std::srand(std::time(0));
     double probability = static_cast<double>(std::rand()) / RAND_MAX;
-    printf("check_availability\n");
+    // printf("check_availability\n");
     return (probability > load_probability) ? true : false;
   }
 
   void train_model( ::weights& _return, const  ::weights& coordWeights, const std::string& train_fname, const double eta, const int32_t epochs, const bool sleep) {
     // for load injection
-    if (sleep) sleep(5);
-    printf("train_model\n");
+    if (sleep) std::this_thread::sleep_for(std::chrono::seconds(5));
+    // printf("train_model\n");
     // initialize
     mlp model;
     vector<vector<double>> _V = coordWeights.v;
     vector<vector<double>> _W = coordWeights.w;
     // ml training
-    std::cout << "init success: " << model.init_training_model(train_fname, _V, _W) << std::endl;
-    std::cout << "training error: " << model.train(eta, epochs) << std::endl;
+    model.init_training_model(train_fname, _V, _W);
+    model.train(eta, epochs);
     vector<vector<double>> newV, newW;
     model.get_weights(newV, newW);
     calc_gradient(newV, _V);
@@ -50,9 +51,7 @@ class ComputeHandler : virtual public ComputeIf {
     // return calculated gradients
     _return.v = newV;
     _return.w = newW;
-    // std::cout << "validate error:" << model.validate("../letters/validate_letters.txt") << std::endl;
   }
-
 };
 
 int main(int argc, char **argv) {

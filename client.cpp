@@ -18,40 +18,44 @@
  */
 
  #include <iostream>
-
+ #include <string>
  #include <thrift/protocol/TBinaryProtocol.h>
  #include <thrift/transport/TSocket.h>
  #include <thrift/transport/TTransportUtils.h>
- #include "ML.hpp"
- #include "gen-cpp/Compute.h"
+ #include "gen-cpp/coordinator.h"
  
  using namespace std;
  using namespace apache::thrift;
  using namespace apache::thrift::protocol;
  using namespace apache::thrift::transport;
  
- 
- int main() {
-   std::shared_ptr<TTransport> socket(new TSocket("localhost", 9000));
-   std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
-   std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-   ComputeClient client(protocol);
- 
-   try {
+int main(int argc, char **argv) {
+    if (argc < 6) {
+        std::cout << "Usage: ./client <coordinator_ip> <coordinator_port> <dir_path> <rounds> <epochs>" << std::endl;
+        return 1;
+    }
+
+    std::string coordinator_ip = argv[1];
+    int coordinator_port = std::stoi(argv[2]);
+    std::string dir_path = argv[3];
+    int rounds = std::stoi(argv[4]);
+    int epochs = std::stoi(argv[5]);
+
+    std::shared_ptr<TTransport> socket(new TSocket(coordinator_ip, coordinator_port));
+    std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+    std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+    coordinatorClient client(protocol);
+
+    try {
         transport->open();
-        std::cout << client.check_availability() << std::endl;
-     //    mlp almighty;
-     //    almighty.init_training_random("../letters/train_letters1.txt", 26, 20);
-     //    vector<vector<double>> v, w;
-     //    almighty.get_weights(v, w);
-     //    weights global = {};
-     //    weights updated = {};
-     //    global.v = v;
-     //    global.w = w;
-     //    client.train_model(updated, global, "../letters/train_letters1.txt", 0.0001, 75);
+        std::cout << "Training with files in: " << dir_path << std::endl;
+        std::cout << "rounds: " << rounds << std::endl;
+        std::cout << "epochs: " << epochs << std::endl;
+        std::cout << "h = 24, k = 26, eta = 0.0001\n";
+        std::cout << "final validation error: " << client.train(dir_path, rounds, epochs, 24, 26, 0.0001) << std::endl;
         transport->close();
-   } catch (TException& tx) {
+    } catch (TException& tx) {
         cout << "ERROR detected: " << tx.what() << endl;
-   }
- }
+    }
+}
  
