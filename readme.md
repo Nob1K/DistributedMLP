@@ -10,3 +10,4 @@ To build the project executables:
     - client: ./client <coordinator_ip> <coordinator_port> <dir_path> <rounds> <epochs>
 
 * Be sure to set up compute nodes and coordinator before starting a job with client
+* compute_client is used to test compute node functionalities and is not used in system
